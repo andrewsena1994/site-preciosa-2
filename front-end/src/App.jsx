@@ -9,7 +9,7 @@ const BRAND = {
   primary: "#ff0f7b",
 };
 const WHATSAPP_PHONE = "5575991451074"; // DDI+DDD+número
-const BACKEND_URL = "https://SEU-BACKEND.com"; // << troque após publicar o backend
+const BACKEND_URL = "https://preco-backend.onrender.com"; // << troque após publicar o backend
 
 const CATEGORIES = [
   { slug: "todos", name: "Todos" },
