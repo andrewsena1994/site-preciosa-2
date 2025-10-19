@@ -115,41 +115,68 @@ function ProductBubble({ product, onAdd, priceMode }) {
     priceMode === "atacado" ? "Atacado" : "Varejo"
   } ${currency(price)}\n${product.caption}`;
 
+return (
+  <div style={{display:'flex', flexDirection:'column', gap:8}}>
+    <div style={{fontWeight:600, fontSize:14}}>{product.name}</div>
+    {product.images?.[0] && (
+      <img
+        src={product.images[0]}
+        alt={product.name}
+        style={{ width:'100%', aspectRatio:'1/1', objectFit:'cover', borderRadius:12, border:'1px solid #eee' }}
+      />
+    )}
+    <div style={{fontSize:14, fontWeight:700}}>{currency(price)}</div>
+    <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+      <button onClick={() => onAdd(product)}
+        style={{padding:'6px 10px', borderRadius:10, background:'#10b981', color:'#fff', border:'none', fontSize:13}}>
+        Adicionar
+      </button>
+      <button
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(legenda);
+            alert("Legenda copiada!");
+          } catch {
+            alert("Não foi possível copiar.");
+          }
+        }}
+        style={{padding:'6px 10px', borderRadius:10, background:'#f1f1f1', border:'1px solid #e5e5e5', fontSize:13}}>
+        Copiar legenda
+      </button>
+    </div>
+  </div>
+);
+
+}
+function Header({ cartCount, onCartClick }) {
   return (
-    <ChatMessage side="left">
-      <div className="flex flex-col gap-2">
-        <div className="font-semibold">{product.name}</div>
-        {product.images?.[0] && (
-          <img
-            src={product.images[0]}
-            alt={product.name}
-            className="w-full rounded-xl border"
-          />
-        )}
-        <div className="text-sm">{currency(price)}</div>
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => onAdd(product)}
-            className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-sm"
-          >
-            Adicionar
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(legenda);
-                alert("Legenda copiada!");
-              } catch {
-                alert("Não foi possível copiar.");
-              }
-            }}
-            className="px-3 py-1.5 rounded-lg bg-neutral-200 text-sm"
-          >
-            Copiar legenda
-          </button>
-        </div>
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 10,
+      background: '#fff', borderBottom: '1px solid #eee',
+      padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+    }}>
+      <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 999, display: 'grid', placeItems: 'center',
+          background: BRAND.primary, color: '#fff', fontWeight: 700
+        }}>{BRAND.logoText}</div>
+        <strong>{BRAND.name}</strong>
       </div>
-    </ChatMessage>
+
+      <button onClick={onCartClick}
+        style={{
+          position: 'relative',
+          background: '#f5f5f5', border: '1px solid #e5e5e5', borderRadius: 12,
+          padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8
+        }}
+        aria-label="Abrir carrinho">
+        <span>🛒</span>
+        <span style={{
+          minWidth: 18, height: 18, fontSize: 12, lineHeight: '18px',
+          background: '#ff0f7b', color: '#fff', borderRadius: 999, textAlign: 'center', padding: '0 6px'
+        }}>{cartCount}</span>
+      </button>
+    </div>
   );
 }
 
@@ -209,6 +236,25 @@ export default function WhatsAppCatalog() {
 
   return (
     <div className="min-h-screen bg-white">
+      <Header
+  cartCount={cart.reduce((sum, i) => sum + i.qty, 0)}
+  onCartClick={() => sendToWhatsApp()}
+/>
+{/* Botão flutuante do carrinho */}
+<button
+  onClick={sendToWhatsApp}
+  aria-label="Enviar pedido no WhatsApp"
+  style={{
+    position: 'fixed', right: 16, bottom: 16, zIndex: 20,
+    width: 56, height: 56, borderRadius: 999,
+    background: BRAND.primary, color: '#fff',
+    display: 'grid', placeItems: 'center',
+    boxShadow: '0 8px 20px rgba(0,0,0,.18)', border: 'none', fontSize: 22
+  }}
+>
+  🛒
+</button>
+
       <div className="max-w-2xl mx-auto px-4 py-6">
         <h1 className="text-xl font-bold mb-4 text-pink-600">
           {BRAND.logoText} {BRAND.name}
@@ -251,16 +297,20 @@ export default function WhatsAppCatalog() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          {filtered.map((p) => (
-            <ProductBubble
-              key={p.id}
-              product={p}
-              onAdd={addToCart}
-              priceMode={priceMode}
-            />
-          ))}
-        </div>
+       <div
+  style={{
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 12
+  }}
+>
+  {filtered.map((p) => (
+    <div key={p.id} style={{ width: '100%' }}>
+      <ProductBubble product={p} onAdd={addToCart} priceMode={priceMode} />
+    </div>
+  ))}
+</div>
+
 
         <button
           onClick={sendToWhatsApp}
