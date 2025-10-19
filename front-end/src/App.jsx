@@ -218,6 +218,31 @@ function ProductCard({ product, onAdd, canSeePrices }) {
     </div>
   );
 }
+function goTo(url) {
+  // Navega na MESMA aba (funciona melhor no iOS)
+  window.location.href = url;
+}
+
+async function sendOrderToBackend(body, BACKEND_URL, token) {
+  try {
+    // Tenta enviar sem bloquear a navegação
+    const data = JSON.stringify(body);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([data], { type: "application/json" });
+      navigator.sendBeacon(`${BACKEND_URL}/api/orders`, blob);
+      return;
+    }
+    fetch(`${BACKEND_URL}/api/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+      body: data,
+      keepalive: true, // ajuda em navegações imediatas
+    }).catch(() => {});
+  } catch {}
+}
 
 function CartModal({ open, onClose, items, onInc, onDec, canSeePrices, onSend }) {
   if (!open) return null;
@@ -353,35 +378,100 @@ function LoginModal({ open, onClose, onSuccess }) {
 
 function AccountModal({ open, onClose, orders }) {
   if (!open) return null;
+
+  const safeOrders = Array.isArray(orders) ? orders : [];
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 55 }}>
-      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }} />
-      <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 16 }}>
-        <div style={{ width: "100%", maxWidth: 560, background: "#fff", borderRadius: 16, border: "1px solid #eee", padding: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div
+        onClick={onClose}
+        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          padding: 16,
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 560,
+            maxHeight: "85vh",
+            overflowY: "auto",
+            background: "#fff",
+            borderRadius: 16,
+            border: "1px solid #eee",
+            padding: 16,
+            boxShadow: "0 10px 24px rgba(0,0,0,.18)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+              position: "sticky",
+              top: 0,
+              background: "#fff",
+            }}
+          >
             <div style={{ fontWeight: 700 }}>Meus pedidos</div>
-            <button onClick={onClose} style={{ padding: "6px 10px", borderRadius: 8, background: "#f5f5f5" }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                background: "#f5f5f5",
+                border: "1px solid #e5e5e5",
+              }}
+            >
               Fechar
             </button>
           </div>
 
-          {orders.length === 0 ? (
-            <div style={{ fontSize: 14, color: "#666" }}>Você ainda não enviou pedidos.</div>
+          {safeOrders.length === 0 ? (
+            <div style={{ fontSize: 14, color: "#666" }}>
+              Você ainda não enviou pedidos.
+            </div>
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
-              {orders.map((o, idx) => (
-                <div key={idx} style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
+              {safeOrders.map((o, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    border: "1px solid #eee",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "#fff",
+                  }}
+                >
                   <div style={{ fontSize: 12, color: "#666" }}>
-                    {new Date(o.created_at || Date.now()).toLocaleString("pt-BR")}
+                    {new Date(
+                      o.created_at ? Number(o.created_at) : Date.now()
+                    ).toLocaleString("pt-BR")}
                   </div>
                   <div style={{ marginTop: 6, display: "grid", gap: 6 }}>
-                    {o.items.map((it, i) => (
+                    {(Array.isArray(o.items) ? o.items : []).map((it, i) => (
                       <div key={i} style={{ fontSize: 14 }}>
-                        • {it.product.name} (SKU {it.product.sku}) — {it.qty}x
+                        • {(it.product?.name || it.name) ?? "Produto"} (SKU{" "}
+                        {(it.product?.sku || it.sku) ?? "-"}) — {it.qty ?? 0}x
                       </div>
                     ))}
                   </div>
-                  {!!o.total && <div style={{ marginTop: 8, fontWeight: 700 }}>Total: {currency(o.total)}</div>}
+                  {o.total != null && (
+                    <div style={{ marginTop: 8, fontWeight: 700 }}>
+                      Total:{" "}
+                      {Number(o.total).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -391,6 +481,7 @@ function AccountModal({ open, onClose, orders }) {
     </div>
   );
 }
+
 
 /* =========================
    PAGE
@@ -477,11 +568,57 @@ export default function WhatsAppCatalog() {
     } catch {}
   };
 
-  const openWhatsAppOrder = async () => {
-    await logOrder();
-    const text = encodeURIComponent(buildWhatsAppOrderText());
-    window.open(`https://wa.me/${WHATSAPP_PHONE}?text=${text}`, "_blank");
+  const openWhatsAppOrder = () => {
+  // 1) monta o texto do pedido
+  const text = encodeURIComponent(
+    [
+      `*${BRAND.name}* — Pedido`,
+      "",
+      ...cart.map(
+        ({ product, qty }) => `• ${product.name} (SKU ${product.sku}) — ${qty}x`
+      ),
+      "",
+      "Olá! Quero finalizar esse pedido.",
+    ].join("\n")
+  );
+
+  // 2) prepara o corpo para registrar no backend, mas NÃO dá await
+  const body = {
+    items: cart.map(({ product, qty }) => ({
+      product_id: product.id,
+      sku: product.sku,
+      name: product.name,
+      qty,
+      price: product.price_atacado,
+    })),
+    total: cart.reduce(
+      (s, i) => s + i.qty * i.product.price_atacado,
+      0
+    ),
+    user: JSON.parse(localStorage.getItem("user_profile") || "{}"),
+    created_at: Date.now(),
+    channel: "whatsapp",
   };
+
+  // guarda localmente também (caso offline)
+  try {
+    const list = JSON.parse(localStorage.getItem("orders") || "[]");
+    list.unshift(body);
+    localStorage.setItem("orders", JSON.stringify(list.slice(0, 100)));
+  } catch {}
+
+  // 3) abre o WhatsApp IMEDIATAMENTE (evita bloqueio no iOS)
+  const wa = `https://wa.me/${WHATSAPP_PHONE}?text=${text}`;
+  goTo(wa);
+
+  // 4) em paralelo, registra no backend (se BACKEND_URL estiver definido)
+  try {
+    // Troque pela sua constante global BACKEND_URL
+    const token = localStorage.getItem("token") || "";
+    sendOrderToBackend(body, BACKEND_URL, token);
+  } catch {}
+};
+
 
   const openWhatsAppHelp = () => {
     const text = encodeURIComponent("Olá! Estou com dúvida, pode me ajudar?");
