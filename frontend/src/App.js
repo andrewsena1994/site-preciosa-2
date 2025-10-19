@@ -18,10 +18,10 @@ import { CartProvider } from './context/CartContext';
 
 function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <div className="App">
-          <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
+        <CartProvider>
+          <div className="App">
             <Header />
             <Routes>
               <Route path="/" element={<Home />} />
@@ -37,10 +37,10 @@ function App() {
             </Routes>
             <Footer />
             <Toaster richColors position="top-right" />
-          </BrowserRouter>
-        </div>
-      </CartProvider>
-    </AuthProvider>
+          </div>
+        </CartProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
