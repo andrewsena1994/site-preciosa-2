@@ -142,15 +142,12 @@ def get_current_user(db: Session = Depends(lambda: SessionLocal()), token: Optio
     return _dep
 
 # ------------ App ------------
-app = FastAPI(title="Preciosa API")
-
-origins = [o.strip() for o in CORS_ALLOW_ORIGINS.split(",") if o.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins if origins else ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# ----------- App ------------
+app = FastAPI(
+    title="Preciosa API",
+    docs_url="/docs",          # Interface Swagger
+    redoc_url="/redoc",        # Interface ReDoc
+    openapi_url="/openapi.json"  # Arquivo de definição da API
 )
 
 # ------------ Endpoints ------------
@@ -228,3 +225,12 @@ def create_order(payload: OrderIn, current: User = Depends(get_current_user())):
 @app.get("/api/health")
 def health():
     return {"ok": True}
+    # ----------- Root & Health ------------
+@app.get("/")
+def root():
+    return {"ok": True, "service": "Preciosa API", "docs": "/docs", "health": "/api/health"}
+
+@app.get("/api/health")
+def health_check():
+    return {"ok": True}
+
