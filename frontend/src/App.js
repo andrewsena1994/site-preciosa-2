@@ -7,7 +7,7 @@ import Home from './pages/Home';
 import Produtos from './pages/Produtos';
 import ProdutoDetalhes from './pages/ProdutoDetalhes';
 import Login from './pages/Login';
-import MinhaC onta from './pages/MinhaConta';
+import MinhaConta from './pages/MinhaConta';
 import Carrinho from './pages/Carrinho';
 import Checkout from './pages/Checkout';
 import Sobre from './pages/Sobre';
