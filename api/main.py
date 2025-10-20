@@ -188,7 +188,6 @@ DOCS_LOCAL_HTML = """
 
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
-    return HTMLResponse(content=DOCS_LOCAL_HTML)
 
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
