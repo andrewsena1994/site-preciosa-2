@@ -160,11 +160,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Swagger local (sem CDN)
-app.mount("/_swagger", StaticFiles(directory=swagger_ui_path, html=True), name="swagger_static")
-
+# ---------- Swagger local, compatível com diferentes versões do pacote ----------
 from fastapi.responses import HTMLResponse
 
+# Detecta onde estão os arquivos (algumas versões usam raiz, outras /static)
+try:
+    from swagger_ui_bundle import swagger_ui_2_path as _sw_path
+except Exception:
+    _sw_path = None
+
+SWAGGER_DIR = None
+if _sw_path:
+    # tenta a raiz
+    cand1 = os.path.join(_sw_path)
+    # tenta a subpasta "static"
+    cand2 = os.path.join(_sw_path, "static")
+
+    if os.path.exists(os.path.join(cand1, "swagger-ui-bundle.js")):
+        SWAGGER_DIR = cand1
+    elif os.path.exists(os.path.join(cand2, "swagger-ui-bundle.js")):
+        SWAGGER_DIR = cand2
+
+# se por algum motivo não achou, ainda assim monta o caminho “cru”
+if SWAGGER_DIR is None:
+    SWAGGER_DIR = _sw_path or ""
+
+# monta os estáticos
+app.mount("/_swagger", StaticFiles(directory=SWAGGER_DIR, html=True), name="swagger_static")
+
+# HTML mínimo (carrega só 1 JS, que define SwaggerUIBundle)
 DOCS_LOCAL_HTML = """
 <!doctype html>
 <html>
@@ -177,10 +201,7 @@ DOCS_LOCAL_HTML = """
   </head>
   <body>
     <div id="swagger-ui"></div>
-
-    <!-- Carrega APENAS o bundle (versão sempre funciona) -->
     <script src="/_swagger/swagger-ui-bundle.js"></script>
-
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         try {
@@ -208,7 +229,7 @@ DOCS_LOCAL_HTML = """
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
     return HTMLResponse(content=DOCS_LOCAL_HTML)
-
+# -------------------------------------------------------------------------------
 
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
