@@ -199,7 +199,9 @@ HAS_STANDALONE = os.path.exists(os.path.join(SWAGGER_DIR, "swagger-ui-standalone
 # Montar os estáticos
 app.mount("/_swagger", StaticFiles(directory=SWAGGER_DIR, html=True), name="swagger_static")
 
-# HTML do /docs
+from fastapi.responses import HTMLResponse
+import time
+
 DOCS_LOCAL_HTML = f"""
 <!doctype html>
 <html>
@@ -207,43 +209,63 @@ DOCS_LOCAL_HTML = f"""
     <meta charset="utf-8"/>
     <title>Preciosa API - Swagger</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/_swagger/swagger-ui.css" />
+    <link rel="stylesheet" href="/_swagger/swagger-ui.css?v={int(time.time())}" />
     <style> body {{ margin:0; background:#fff; }} </style>
   </head>
   <body>
     <div id="swagger-ui"></div>
 
-    <script src="/_swagger/{JS_MAIN}"></script>
-    {"<script src='/_swagger/swagger-ui-standalone-preset.js'></script>" if HAS_STANDALONE else ""}
-
+    <!-- Carrega com cache-busting; funciona com swagger-ui.js OU swagger-ui-bundle.js -->
     <script>
-      document.addEventListener('DOMContentLoaded', function () {{
-        try {{
-          // Em versões antigas, a global pode ser 'SwaggerUI' ao invés de 'SwaggerUIBundle'
-          var Factory = (typeof SwaggerUIBundle !== 'undefined') ? SwaggerUIBundle
-                       : (typeof SwaggerUI !== 'undefined') ? SwaggerUI
-                       : null;
-          if (!Factory) {{
-            throw new Error("SwaggerUIBundle/SwaggerUI not found (JS não carregou)");
-          }}
-          window.ui = Factory({{
-            url: "/openapi.json",
-            dom_id: "#swagger-ui",
-            presets: (Factory.presets && Factory.presets.apis) ? [Factory.presets.apis] : undefined,
-            layout: "BaseLayout"
+      (function() {{
+        var ts = '{int(time.time())}';
+        function addScript(name) {{
+          return new Promise(function(resolve, reject) {{
+            var s = document.createElement('script');
+            s.src = '/_swagger/' + name + '?v=' + ts;
+            s.onload = resolve;
+            s.onerror = reject;
+            document.body.appendChild(s);
           }});
-        }} catch (e) {{
-          document.body.innerHTML =
-            '<div style="font-family:system-ui;padding:24px">' +
-            '<h3>Falha ao inicializar o Swagger UI.</h3>' +
-            '<pre style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border:1px solid #eee;">'
-            + String(e) + '</pre>' +
-            '<p>Teste os arquivos estáticos: ' +
-            '<a href="/_swagger/{JS_MAIN}">JS</a> · <a href="/_swagger/swagger-ui.css">CSS</a></p>' +
-            '<p>Tente também o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
-            '</div>';
         }}
-      }});
+
+        // tenta primeiro o bundle; se falhar, cai para swagger-ui.js
+        addScript('swagger-ui-bundle.js').catch(function() {{
+          return addScript('swagger-ui.js');
+        }}).then(function() {{
+          document.addEventListener('DOMContentLoaded', function () {{
+            try {{
+              var Factory = (typeof window.SwaggerUIBundle !== 'undefined')
+                            ? window.SwaggerUIBundle
+                            : (typeof window.SwaggerUI !== 'undefined')
+                              ? window.SwaggerUI
+                              : null;
+              if (!Factory) throw new Error('SwaggerUI/SwaggerUIBundle não encontrado (JS não carregou)');
+
+              var presets = (Factory.presets && Factory.presets.apis) ? [Factory.presets.apis] : undefined;
+
+              window.ui = Factory({{
+                url: "/openapi.json",
+                dom_id: "#swagger-ui",
+                presets: presets,
+                layout: "BaseLayout"
+              }});
+            }} catch (e) {{
+              document.body.innerHTML =
+                '<div style="font-family:system-ui;padding:24px">' +
+                '<h3>Falha ao inicializar o Swagger UI.</h3>' +
+                '<pre style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border:1px solid #eee;">'
+                + String(e) + '</pre>' +
+                '<p>Teste estáticos: ' +
+                '<a href="/_swagger/swagger-ui.css">CSS</a> · ' +
+                '<a href="/_swagger/swagger-ui-bundle.js">bundle</a> · ' +
+                '<a href="/_swagger/swagger-ui.js">ui.js</a></p>' +
+                '<p>Tente também o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
+                '</div>';
+            }}
+          }});
+        }});
+      }})();
     </script>
   </body>
 </html>
@@ -252,6 +274,7 @@ DOCS_LOCAL_HTML = f"""
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
     return HTMLResponse(content=DOCS_LOCAL_HTML)
+
 # -----------------------------------------------------------------------------------------
 
 
