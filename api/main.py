@@ -199,83 +199,44 @@ HAS_STANDALONE = os.path.exists(os.path.join(SWAGGER_DIR, "swagger-ui-standalone
 # Montar os estáticos
 app.mount("/_swagger", StaticFiles(directory=SWAGGER_DIR, html=True), name="swagger_static")
 
-from fastapi.responses import HTMLResponse
-import time
 
-DOCS_LOCAL_HTML = f"""
+from fastapi.responses import HTMLResponse
+
+DOCS_CDN_HTML = """
 <!doctype html>
 <html>
   <head>
     <meta charset="utf-8"/>
-    <title>Preciosa API - Swagger</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="stylesheet" href="/_swagger/swagger-ui.css?v={int(time.time())}" />
-    <style> body {{ margin:0; background:#fff; }} </style>
+    <title>Preciosa API - Swagger Docs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet"
+          href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+      body { margin: 0; background: #fff; }
+    </style>
   </head>
   <body>
     <div id="swagger-ui"></div>
-
-    <!-- Carrega com cache-busting; funciona com swagger-ui.js OU swagger-ui-bundle.js -->
+    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
     <script>
-      (function() {{
-        var ts = '{int(time.time())}';
-        function addScript(name) {{
-          return new Promise(function(resolve, reject) {{
-            var s = document.createElement('script');
-            s.src = '/_swagger/' + name + '?v=' + ts;
-            s.onload = resolve;
-            s.onerror = reject;
-            document.body.appendChild(s);
-          }});
-        }}
-
-        // tenta primeiro o bundle; se falhar, cai para swagger-ui.js
-        addScript('swagger-ui-bundle.js').catch(function() {{
-          return addScript('swagger-ui.js');
-        }}).then(function() {{
-          document.addEventListener('DOMContentLoaded', function () {{
-            try {{
-              var Factory = (typeof window.SwaggerUIBundle !== 'undefined')
-                            ? window.SwaggerUIBundle
-                            : (typeof window.SwaggerUI !== 'undefined')
-                              ? window.SwaggerUI
-                              : null;
-              if (!Factory) throw new Error('SwaggerUI/SwaggerUIBundle não encontrado (JS não carregou)');
-
-              var presets = (Factory.presets && Factory.presets.apis) ? [Factory.presets.apis] : undefined;
-
-              window.ui = Factory({{
-                url: "/openapi.json",
-                dom_id: "#swagger-ui",
-                presets: presets,
-                layout: "BaseLayout"
-              }});
-            }} catch (e) {{
-              document.body.innerHTML =
-                '<div style="font-family:system-ui;padding:24px">' +
-                '<h3>Falha ao inicializar o Swagger UI.</h3>' +
-                '<pre style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border:1px solid #eee;">'
-                + String(e) + '</pre>' +
-                '<p>Teste estáticos: ' +
-                '<a href="/_swagger/swagger-ui.css">CSS</a> · ' +
-                '<a href="/_swagger/swagger-ui-bundle.js">bundle</a> · ' +
-                '<a href="/_swagger/swagger-ui.js">ui.js</a></p>' +
-                '<p>Tente também o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
-                '</div>';
-            }}
-          }});
-        }});
-      }})();
+      window.onload = function() {
+        const ui = SwaggerUIBundle({
+          url: '/openapi.json',
+          dom_id: '#swagger-ui',
+          presets: [SwaggerUIBundle.presets.apis],
+          layout: 'BaseLayout',
+        });
+        window.ui = ui;
+      };
     </script>
   </body>
 </html>
 """
 
 @app.get("/docs", include_in_schema=False)
-def docs_local() -> HTMLResponse:
-    return HTMLResponse(content=DOCS_LOCAL_HTML)
+def swagger_docs() -> HTMLResponse:
+    return HTMLResponse(content=DOCS_CDN_HTML)
 
-# -----------------------------------------------------------------------------------------
 
 
 
