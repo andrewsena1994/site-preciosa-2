@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_4_path
-
+from fastapi.responses import HTMLResponse
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
@@ -154,14 +154,42 @@ app = FastAPI(
 # Servir os arquivos do Swagger UI localmente (sem CDN)
 app.mount("/_swagger", StaticFiles(directory=swagger_ui_4_path, html=True), name="swagger_static")
 
+from fastapi.responses import HTMLResponse
+
+DOCS_LOCAL_HTML = """
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Preciosa API - Swagger</title>
+    <link rel="stylesheet" href="/_swagger/swagger-ui.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style> body { margin:0; background:#fff; } </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+
+    <script src="/_swagger/swagger-ui-bundle.js"></script>
+    <script src="/_swagger/swagger-ui-standalone-preset.js"></script>
+    <script>
+      window.ui = SwaggerUIBundle({
+        url: "/openapi.json",
+        dom_id: "#swagger-ui",
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        layout: "BaseLayout"
+      });
+    </script>
+  </body>
+</html>
+"""
+
 @app.get("/docs", include_in_schema=False)
-def overridden_swagger():
-    return get_swagger_ui_html(
-        openapi_url="/openapi.json",
-        title="Preciosa API - Swagger",
-        swagger_js_url="/_swagger/swagger-ui-bundle.js",
-        swagger_css_url="/_swagger/swagger-ui.css",
-    )
+def docs_local() -> HTMLResponse:
+    return HTMLResponse(content=DOCS_LOCAL_HTML)
+
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
