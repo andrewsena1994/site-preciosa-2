@@ -255,6 +255,7 @@ def docs_local() -> HTMLResponse:
 # -----------------------------------------------------------------------------------------
 
 
+
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
