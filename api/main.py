@@ -1,12 +1,13 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
-from fastapi.staticfiles import StaticFiles
-from fastapi.openapi.docs import get_swagger_ui_html
-from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_4_path
-from fastapi.responses import HTMLResponse
-from fastapi import FastAPI, HTTPException, Depends
+
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_path
+
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
 from passlib.hash import bcrypt
@@ -124,10 +125,7 @@ def create_token(user_id: int, email: str) -> str:
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
 
-def get_current_user(db: Session = Depends(lambda: SessionLocal()), token: Optional[str] = None):
-    # FastAPI pega Authorization automaticamente via dependency? vamos ler do header manualmente
-    # Como simplificação, usaremos o header "Authorization: Bearer <token>"
-    from fastapi import Request
+def get_current_user(db: Session = Depends(lambda: SessionLocal())):
     def _dep(request: Request):
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
@@ -147,14 +145,23 @@ def get_current_user(db: Session = Depends(lambda: SessionLocal()), token: Optio
 # ------------ App ------------
 app = FastAPI(
     title="Preciosa API",
-    docs_url=None,          # Interface Swagger
-    redoc_url="/redoc",        # Interface ReDoc
-    openapi_url="/openapi.json"  # Arquivo de definição da API
+    docs_url=None,               # desativa docs padrão do FastAPI
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
-# Servir os arquivos do Swagger UI localmente (sem CDN)
-app.mount("/_swagger", StaticFiles(directory=swagger_ui_4_path, html=True), name="swagger_static")
 
-from fastapi.responses import HTMLResponse
+# CORS
+origins = [o.strip() for o in CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins if origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Swagger local (sem CDN)
+app.mount("/_swagger", StaticFiles(directory=swagger_ui_path, html=True), name="swagger_static")
 
 DOCS_LOCAL_HTML = """
 <!doctype html>
@@ -168,7 +175,6 @@ DOCS_LOCAL_HTML = """
   </head>
   <body>
     <div id="swagger-ui"></div>
-
     <script src="/_swagger/swagger-ui-bundle.js"></script>
     <script src="/_swagger/swagger-ui-standalone-preset.js"></script>
     <script>
@@ -188,6 +194,7 @@ DOCS_LOCAL_HTML = """
 
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
+    return HTMLResponse(content=DOCS_LOCAL_HTML)
 
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
@@ -264,12 +271,7 @@ def create_order(payload: OrderIn, current: User = Depends(get_current_user())):
 @app.get("/api/health")
 def health():
     return {"ok": True}
-    # ----------- Root & Health ------------
+
 @app.get("/")
 def root():
     return {"ok": True, "service": "Preciosa API", "docs": "/docs", "health": "/api/health"}
-
-@app.get("/api/health")
-def health_check():
-    return {"ok": True}
-
