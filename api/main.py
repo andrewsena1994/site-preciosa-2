@@ -163,29 +163,42 @@ app.add_middleware(
 # Swagger local (sem CDN)
 app.mount("/_swagger", StaticFiles(directory=swagger_ui_path, html=True), name="swagger_static")
 
+from fastapi.responses import HTMLResponse
+
 DOCS_LOCAL_HTML = """
 <!doctype html>
 <html>
   <head>
     <meta charset="utf-8"/>
     <title>Preciosa API - Swagger</title>
-    <link rel="stylesheet" href="/_swagger/swagger-ui.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/_swagger/swagger-ui.css" />
     <style> body { margin:0; background:#fff; } </style>
   </head>
   <body>
     <div id="swagger-ui"></div>
+
+    <!-- Carrega APENAS o bundle (versão sempre funciona) -->
     <script src="/_swagger/swagger-ui-bundle.js"></script>
-    <script src="/_swagger/swagger-ui-standalone-preset.js"></script>
+
     <script>
-      window.ui = SwaggerUIBundle({
-        url: "/openapi.json",
-        dom_id: "#swagger-ui",
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        layout: "BaseLayout"
+      document.addEventListener('DOMContentLoaded', function () {
+        try {
+          window.ui = SwaggerUIBundle({
+            url: "/openapi.json",
+            dom_id: "#swagger-ui",
+            presets: [SwaggerUIBundle.presets.apis],
+            layout: "BaseLayout"
+          });
+        } catch (e) {
+          document.body.innerHTML =
+            '<div style="font-family:system-ui;padding:24px">' +
+            '<h3>Falha ao inicializar o Swagger UI.</h3>' +
+            '<pre style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border:1px solid #eee;">'
+            + String(e) + '</pre>' +
+            '<p>Tente o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
+            '</div>';
+        }
       });
     </script>
   </body>
@@ -195,6 +208,7 @@ DOCS_LOCAL_HTML = """
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
     return HTMLResponse(content=DOCS_LOCAL_HTML)
+
 
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
