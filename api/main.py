@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
-from swagger_ui_bundle import swagger_ui_4_path
+from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_4_path
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
