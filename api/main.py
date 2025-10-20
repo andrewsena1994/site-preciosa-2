@@ -160,36 +160,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- Swagger local, compatível com diferentes versões do pacote ----------
+# ---------- Swagger local robusto (detecta pasta/arquivos em tempo de execução) ----------
 from fastapi.responses import HTMLResponse
+import os
 
-# Detecta onde estão os arquivos (algumas versões usam raiz, outras /static)
+# Tenta importar um dos caminhos disponíveis do pacote
 try:
-    from swagger_ui_bundle import swagger_ui_2_path as _sw_path
+    from swagger_ui_bundle import swagger_ui_4_path as _base_path
 except Exception:
-    _sw_path = None
+    try:
+        from swagger_ui_bundle import swagger_ui_3_path as _base_path
+    except Exception:
+        from swagger_ui_bundle import swagger_ui_2_path as _base_path  # versão mais antiga
 
+# Descobrir a pasta real onde estão os arquivos
+candidates = [
+    _base_path,                     # algumas versões já apontam direto pra pasta correta
+    os.path.join(_base_path, "static"),  # outras guardam dentro de /static
+]
 SWAGGER_DIR = None
-if _sw_path:
-    # tenta a raiz
-    cand1 = os.path.join(_sw_path)
-    # tenta a subpasta "static"
-    cand2 = os.path.join(_sw_path, "static")
-
-    if os.path.exists(os.path.join(cand1, "swagger-ui-bundle.js")):
-        SWAGGER_DIR = cand1
-    elif os.path.exists(os.path.join(cand2, "swagger-ui-bundle.js")):
-        SWAGGER_DIR = cand2
-
-# se por algum motivo não achou, ainda assim monta o caminho “cru”
+for p in candidates:
+    if os.path.exists(os.path.join(p, "swagger-ui.css")):
+        SWAGGER_DIR = p
+        break
 if SWAGGER_DIR is None:
-    SWAGGER_DIR = _sw_path or ""
+    # fallback mesmo assim
+    SWAGGER_DIR = _base_path
 
-# monta os estáticos
+# Descobrir o nome do JS principal e se existe o standalone-preset
+if os.path.exists(os.path.join(SWAGGER_DIR, "swagger-ui-bundle.js")):
+    JS_MAIN = "swagger-ui-bundle.js"
+else:
+    # versões antigas usam swagger-ui.js
+    JS_MAIN = "swagger-ui.js"
+
+HAS_STANDALONE = os.path.exists(os.path.join(SWAGGER_DIR, "swagger-ui-standalone-preset.js"))
+
+# Montar os estáticos
 app.mount("/_swagger", StaticFiles(directory=SWAGGER_DIR, html=True), name="swagger_static")
 
-# HTML mínimo (carrega só 1 JS, que define SwaggerUIBundle)
-DOCS_LOCAL_HTML = """
+# HTML do /docs
+DOCS_LOCAL_HTML = f"""
 <!doctype html>
 <html>
   <head>
@@ -197,30 +208,42 @@ DOCS_LOCAL_HTML = """
     <title>Preciosa API - Swagger</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="/_swagger/swagger-ui.css" />
-    <style> body { margin:0; background:#fff; } </style>
+    <style> body {{ margin:0; background:#fff; }} </style>
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="/_swagger/swagger-ui-bundle.js"></script>
+
+    <script src="/_swagger/{JS_MAIN}"></script>
+    {"<script src='/_swagger/swagger-ui-standalone-preset.js'></script>" if HAS_STANDALONE else ""}
+
     <script>
-      document.addEventListener('DOMContentLoaded', function () {
-        try {
-          window.ui = SwaggerUIBundle({
+      document.addEventListener('DOMContentLoaded', function () {{
+        try {{
+          // Em versões antigas, a global pode ser 'SwaggerUI' ao invés de 'SwaggerUIBundle'
+          var Factory = (typeof SwaggerUIBundle !== 'undefined') ? SwaggerUIBundle
+                       : (typeof SwaggerUI !== 'undefined') ? SwaggerUI
+                       : null;
+          if (!Factory) {{
+            throw new Error("SwaggerUIBundle/SwaggerUI not found (JS não carregou)");
+          }}
+          window.ui = Factory({{
             url: "/openapi.json",
             dom_id: "#swagger-ui",
-            presets: [SwaggerUIBundle.presets.apis],
+            presets: (Factory.presets && Factory.presets.apis) ? [Factory.presets.apis] : undefined,
             layout: "BaseLayout"
-          });
-        } catch (e) {
+          }});
+        }} catch (e) {{
           document.body.innerHTML =
             '<div style="font-family:system-ui;padding:24px">' +
             '<h3>Falha ao inicializar o Swagger UI.</h3>' +
             '<pre style="white-space:pre-wrap;background:#f6f8fa;padding:12px;border:1px solid #eee;">'
             + String(e) + '</pre>' +
-            '<p>Tente o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
+            '<p>Teste os arquivos estáticos: ' +
+            '<a href="/_swagger/{JS_MAIN}">JS</a> · <a href="/_swagger/swagger-ui.css">CSS</a></p>' +
+            '<p>Tente também o <a href="/redoc">/redoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
             '</div>';
-        }
-      });
+        }}
+      }});
     </script>
   </body>
 </html>
@@ -229,7 +252,8 @@ DOCS_LOCAL_HTML = """
 @app.get("/docs", include_in_schema=False)
 def docs_local() -> HTMLResponse:
     return HTMLResponse(content=DOCS_LOCAL_HTML)
-# -------------------------------------------------------------------------------
+# -----------------------------------------------------------------------------------------
+
 
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
