@@ -147,7 +147,7 @@ def get_current_user(db: Session = Depends(lambda: SessionLocal()), token: Optio
 # ------------ App ------------
 app = FastAPI(
     title="Preciosa API",
-    docs_url="/docs",          # Interface Swagger
+    docs_url=None,          # Interface Swagger
     redoc_url="/redoc",        # Interface ReDoc
     openapi_url="/openapi.json"  # Arquivo de definição da API
 )
@@ -162,62 +162,6 @@ def overridden_swagger():
         swagger_js_url="/_swagger/swagger-ui-bundle.js",
         swagger_css_url="/_swagger/swagger-ui.css",
     )
-
-# ---- Swagger com fallback de CDN (corrige /docs em branco) ----
-from fastapi.responses import HTMLResponse
-
-DOCS_HTML = """
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>Preciosa API - Swagger</title>
-    <link id="swagger-css" rel="stylesheet"
-          href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"
-          onerror="this.onerror=null; this.href='https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css'">
-  </head>
-  <body>
-    <div id="swagger-ui"></div>
-    <script>
-      function loadScript(urls, cb, i=0){
-        if(i>=urls.length){ cb(new Error('Falha nos CDNs')); return; }
-        var s=document.createElement('script');
-        s.src=urls[i];
-        s.onload=function(){ cb(); };
-        s.onerror=function(){ loadScript(urls, cb, i+1); };
-        document.body.appendChild(s);
-      }
-      const urls = [
-        "https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
-        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"
-      ];
-      loadScript(urls, function(err){
-        if(err){
-          document.body.innerHTML =
-            '<div style="font-family:system-ui;margin:24px">' +
-            '<h3>Não foi possível carregar o Swagger UI.</h3>' +
-            '<p>Tente o <a href="/redoc">ReDoc</a> ou baixe o JSON em <a href="/openapi.json">/openapi.json</a>.</p>' +
-            '</div>';
-          return;
-        }
-        window.ui = SwaggerUIBundle({
-          url: "%(openapi_url)s",
-          dom_id: "#swagger-ui",
-          presets: [SwaggerUIBundle.presets.apis],
-          layout: "BaseLayout"
-        });
-      });
-    </script>
-  </body>
-</html>
-""".replace("%(openapi_url)s", "/openapi.json")
-
-@app.get("/docs", include_in_schema=False)
-def custom_swagger_ui() -> HTMLResponse:
-  return HTMLResponse(content=DOCS_HTML)
-# ---------------------------------------------------------------
-
-
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
