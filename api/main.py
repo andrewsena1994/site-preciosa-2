@@ -1,6 +1,9 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
+from fastapi.staticfiles import StaticFiles
+from fastapi.openapi.docs import get_swagger_ui_html
+from swagger_ui_bundle import swagger_ui_4_path
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -148,6 +151,18 @@ app = FastAPI(
     redoc_url="/redoc",        # Interface ReDoc
     openapi_url="/openapi.json"  # Arquivo de definição da API
 )
+# Servir os arquivos do Swagger UI localmente (sem CDN)
+app.mount("/_swagger", StaticFiles(directory=swagger_ui_4_path, html=True), name="swagger_static")
+
+@app.get("/docs", include_in_schema=False)
+def overridden_swagger():
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Preciosa API - Swagger",
+        swagger_js_url="/_swagger/swagger-ui-bundle.js",
+        swagger_css_url="/_swagger/swagger-ui.css",
+    )
+
 # ---- Swagger com fallback de CDN (corrige /docs em branco) ----
 from fastapi.responses import HTMLResponse
 
