@@ -1,6 +1,8 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Optional
+import logging
+from sqlalchemy.exc import IntegrityError
 
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +19,8 @@ from passlib.hash import bcrypt
 
 from sqlalchemy import create_engine, ForeignKey, String, Integer, Float, DateTime
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship, Session
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("precoisa")  # nome que você quiser
 
 # ------------ Config ------------
 JWT_ALG = "HS256"
@@ -250,8 +254,9 @@ def swagger_docs() -> HTMLResponse:
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
-    try:
-        with SessionLocal() as db:
+    with SessionLocal() as db:
+        try:
+            # checagem defensiva (evita 409 direto)
             if db.query(User).filter(User.email == payload.email.lower().strip()).first():
                 raise HTTPException(status_code=409, detail="E-mail já registrado")
 
@@ -264,13 +269,28 @@ def register(payload: RegisterIn):
             db.add(user)
             db.commit()
             db.refresh(user)
+
             token = create_token(user.id, user.email)
-            return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}}
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Register failed")
-        raise HTTPException(status_code=500, detail="internal_error")
+            return {
+                "token": token,
+                "user": {
+                    "id": user.id,
+                    "name": user.name,
+                    "email": user.email,
+                    "phone": user.phone,
+                },
+            }
+
+        except IntegrityError as ie:
+            db.rollback()
+            logger.warning("Registro com e-mail duplicado: %s", payload.email)
+            raise HTTPException(status_code=409, detail="E-mail já registrado")
+
+        except Exception as e:
+            db.rollback()
+            logger.exception("Falha ao registrar usuário")
+            raise HTTPException(status_code=500, detail="internal_error")
+
 
 @app.post("/api/auth/login", response_model=AuthOut)
 def login(payload: LoginIn):
