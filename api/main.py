@@ -260,11 +260,14 @@ def register(payload: RegisterIn):
             if db.query(User).filter(User.email == payload.email.lower().strip()).first():
                 raise HTTPException(status_code=409, detail="E-mail já registrado")
 
-            user = User(
-                name=payload.name.strip(),
-                email=payload.email.lower().strip(),
-                phone=(payload.phone or "").strip(),
-                password_hash=bcrypt.hash(payload.password),
+           user = User(
+    name=payload.name.strip(),
+    email=payload.email.lower().strip(),
+    phone=(payload.phone or "").strip(),
+    password_hash=password_hash,
+)
+              password_bytes = payload.password.encode("utf-8")[:72]
+password_hash = bcrypt.hash(password_bytes),
             )
             db.add(user)
             db.commit()
