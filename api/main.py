@@ -254,40 +254,56 @@ def swagger_docs() -> HTMLResponse:
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
-    name = payload.name.strip()
-    email = payload.email.lower().strip()
-    phone = (payload.phone or "").strip()
+    try:
+        with SessionLocal() as db:
+            # Já existe?
+            if db.query(User).filter(User.email == payload.email.lower().strip()).first():
+                raise HTTPException(status_code=409, detail="E-mail já registrado")
 
-    # --- bcrypt aceita no máximo 72 bytes ---
-    pwd = payload.password or ""
-    pwd_bytes = pwd.encode("utf-8")
-    if len(pwd_bytes) > 72:
-        # Trunca de forma segura para 72 bytes (evita erro do passlib/bcrypt)
-        pwd = pwd_bytes[:72].decode("utf-8", errors="ignore")
+            # Hash da senha (bcrypt aceita até 72 bytes)
+            pwd = (payload.password or "").strip()
+            if not pwd:
+                raise HTTPException(status_code=422, detail="Senha obrigatória")
 
-    # Gera o hash SEMPRE (agora não estoura erro do tamanho)
-    password_hash = bcrypt.hash(pwd)
+            if len(pwd.encode("utf-8")) > 72:
+                raise HTTPException(status_code=422, detail="Senha muito longa (máx. 72 bytes)")
 
-    with SessionLocal() as db:
-        # Checa se o email já existe
-        if db.query(User).filter(User.email == email).first():
-            raise HTTPException(status_code=409, detail="E-mail já registrado")
+            password_hash = bcrypt.hash(pwd)
 
-        user = User(
-            name=name,
-            email=email,
-            phone=phone,
-            password_hash=password_hash,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+            user = User(
+                name=payload.name.strip(),
+                email=payload.email.lower().strip(),
+                phone=(payload.phone or "").strip(),
+                password_hash=password_hash,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
-        token = create_token(user.id, user.email)
-        return {
-            "token": token,
-            "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}
-        }
+            token = create_token(user.id, user.email)
+            return {
+                "token": token,
+                "user": {
+                    "id": user.id,
+                    "name": user.name,
+                    "email": user.email,
+                    "phone": user.phone,
+                },
+            }
+
+    except IntegrityError:
+        # Colisão de UNIQUE (e-mail duplicado)
+        raise HTTPException(status_code=409, detail="E-mail já registrado")
+
+    except HTTPException:
+        # Repassa HTTPExceptions que nós mesmos levantamos
+        raise
+
+    except Exception as e:
+        # Log simples e erro genérico
+        print("erro_register:", repr(e))
+        raise HTTPException(status_code=500, detail="internal_error")
+
 
 
         except IntegrityError as ie:
