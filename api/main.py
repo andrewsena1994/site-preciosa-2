@@ -254,35 +254,41 @@ def swagger_docs() -> HTMLResponse:
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
-    with SessionLocal() as db:
-        try:
-            # checagem defensiva (evita 409 direto)
-            if db.query(User).filter(User.email == payload.email.lower().strip()).first():
-                raise HTTPException(status_code=409, detail="E-mail já registrado")
-            
-            password_bytes = payload.password.encode("utf-8")[:72]
-            password_hash = bcrypt.hash(password_bytes)
-            
-            user = User(
-                name=payload.name.strip(),
-                email=payload.email.lower().strip(),
-                phone=(payload.phone or "").strip(),
-                password_hash=password_hash,
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+    name = payload.name.strip()
+    email = payload.email.lower().strip()
+    phone = (payload.phone or "").strip()
 
-            token = create_token(user.id, user.email)
-            return {
-                "token": token,
-                "user": {
-                    "id": user.id,
-                    "name": user.name,
-                    "email": user.email,
-                    "phone": user.phone,
-                },
-            }
+    # --- bcrypt aceita no máximo 72 bytes ---
+    pwd = payload.password or ""
+    pwd_bytes = pwd.encode("utf-8")
+    if len(pwd_bytes) > 72:
+        # Trunca de forma segura para 72 bytes (evita erro do passlib/bcrypt)
+        pwd = pwd_bytes[:72].decode("utf-8", errors="ignore")
+
+    # Gera o hash SEMPRE (agora não estoura erro do tamanho)
+    password_hash = bcrypt.hash(pwd)
+
+    with SessionLocal() as db:
+        # Checa se o email já existe
+        if db.query(User).filter(User.email == email).first():
+            raise HTTPException(status_code=409, detail="E-mail já registrado")
+
+        user = User(
+            name=name,
+            email=email,
+            phone=phone,
+            password_hash=password_hash,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        token = create_token(user.id, user.email)
+        return {
+            "token": token,
+            "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}
+        }
+
 
         except IntegrityError as ie:
             db.rollback()
