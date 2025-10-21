@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_path
-
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("preciosa")he
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
 from passlib.hash import bcrypt
@@ -28,6 +30,10 @@ engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
 )
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 class Base(DeclarativeBase):
@@ -243,20 +249,27 @@ def swagger_docs() -> HTMLResponse:
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
-    with SessionLocal() as db:
-        if db.query(User).filter(User.email == payload.email).first():
-            raise HTTPException(status_code=409, detail="E-mail já registrado")
-        user = User(
-            name=payload.name.strip(),
-            email=payload.email.lower().strip(),
-            phone=(payload.phone or "").strip(),
-            password_hash=bcrypt.hash(payload.password),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        token = create_token(user.id, user.email)
-        return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}}
+    try:
+        with SessionLocal() as db:
+            if db.query(User).filter(User.email == payload.email.lower().strip()).first():
+                raise HTTPException(status_code=409, detail="E-mail já registrado")
+
+            user = User(
+                name=payload.name.strip(),
+                email=payload.email.lower().strip(),
+                phone=(payload.phone or "").strip(),
+                password_hash=bcrypt.hash(payload.password),
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            token = create_token(user.id, user.email)
+            return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Register failed")
+        raise HTTPException(status_code=500, detail="internal_error")
 
 @app.post("/api/auth/login", response_model=AuthOut)
 def login(payload: LoginIn):
@@ -313,8 +326,15 @@ def create_order(payload: OrderIn, current: User = Depends(get_current_user())):
         )
 
 @app.get("/api/health")
-def health():
-    return {"ok": True}
+def health_check():
+    try:
+        with engine.connect() as conn:
+            conn.exec_driver_sql("SELECT 1")
+        return {"ok": True, "db": "up"}
+    except Exception as e:
+        logger.exception("DB health failed")
+        raise HTTPException(status_code=500, detail="db_down")
+
 
 @app.get("/")
 def root():
