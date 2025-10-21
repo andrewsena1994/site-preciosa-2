@@ -9,7 +9,8 @@ from fastapi.responses import HTMLResponse
 from swagger_ui_bundle import swagger_ui_2_path as swagger_ui_path
 import logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("preciosa")he
+logger = logging.getLogger("preciosa")
+
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
 from passlib.hash import bcrypt
