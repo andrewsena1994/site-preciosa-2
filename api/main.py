@@ -267,8 +267,7 @@ def register(payload: RegisterIn):
                 password_hash=password_hash,
             )
             password_bytes = payload.password.encode("utf-8")[:72]
-            password_hash = bcrypt.hash(password_bytes),
-            )
+            password_hash = bcrypt.hash(password_bytes)
             db.add(user)
             db.commit()
             db.refresh(user)
