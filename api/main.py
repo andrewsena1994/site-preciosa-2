@@ -260,7 +260,7 @@ def register(payload: RegisterIn):
             if db.query(User).filter(User.email == payload.email.lower().strip()).first():
                 raise HTTPException(status_code=409, detail="E-mail já registrado")
 
-           user = User(
+            user = User(
                 name=payload.name.strip(),
                 email=payload.email.lower().strip(),
                 phone=(payload.phone or "").strip(),
