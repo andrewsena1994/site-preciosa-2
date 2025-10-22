@@ -254,13 +254,17 @@ def swagger_docs() -> HTMLResponse:
 # ------------ Endpoints ------------
 @app.post("/api/auth/register", response_model=AuthOut)
 def register(payload: RegisterIn):
+    # --- NÃO EDITE PARA NÃO PERDER O try/except ---
     try:
         with SessionLocal() as db:
-            # Já existe?
-            if db.query(User).filter(User.email == payload.email.lower().strip()).first():
+            # E-mail já cadastrado?
+            existing = db.query(User).filter(
+                User.email == payload.email.lower().strip()
+            ).first()
+            if existing:
                 raise HTTPException(status_code=409, detail="E-mail já registrado")
 
-            # Hash da senha (bcrypt aceita até 72 bytes)
+            # Validação da senha (bcrypt: máx. 72 bytes)
             pwd = (payload.password or "").strip()
             if not pwd:
                 raise HTTPException(status_code=422, detail="Senha obrigatória")
@@ -292,29 +296,18 @@ def register(payload: RegisterIn):
             }
 
     except IntegrityError:
-        # Colisão de UNIQUE (e-mail duplicado)
+        # UNIQUE violation (e-mail duplicado), caso escape da checagem acima
         raise HTTPException(status_code=409, detail="E-mail já registrado")
 
     except HTTPException:
-        # Repassa HTTPExceptions que nós mesmos levantamos
+        # Repassa erros que nós mesmos levantamos
         raise
 
     except Exception as e:
-        # Log simples e erro genérico
+        # Evita 500 silencioso e padroniza retorno
         print("erro_register:", repr(e))
         raise HTTPException(status_code=500, detail="internal_error")
 
-
-
-        except IntegrityError as ie:
-            db.rollback()
-            logger.warning("Registro com e-mail duplicado: %s", payload.email)
-            raise HTTPException(status_code=409, detail="E-mail já registrado")
-
-        except Exception as e:
-            db.rollback()
-            logger.exception("Falha ao registrar usuário")
-            raise HTTPException(status_code=500, detail="internal_error")
 
 
 @app.post("/api/auth/login", response_model=AuthOut)
