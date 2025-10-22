@@ -7,4 +7,4 @@ email-validator==2.2.0
 passlib==1.7.4
 bcrypt==4.0.1
 swagger-ui-bundle==0.0.9
-psycopg2-binary==2.9.9
+psycopg[binary]==3.2.1
