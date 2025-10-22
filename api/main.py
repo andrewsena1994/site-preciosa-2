@@ -15,10 +15,12 @@ logger = logging.getLogger("preciosa")
 
 from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
-from passlib.hash import bcrypt
+from passlib.context import CryptContext
+
 
 from sqlalchemy import create_engine, ForeignKey, String, Integer, Float, DateTime
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship, Session
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("precoisa")  # nome que você quiser
 
@@ -272,7 +274,7 @@ def register(payload: RegisterIn):
             if len(pwd.encode("utf-8")) > 72:
                 raise HTTPException(status_code=422, detail="Senha muito longa (máx. 72 bytes)")
 
-            password_hash = bcrypt.hash(pwd)
+            password_hash=pwd_context.hash(payload.password)
 
             user = User(
                 name=payload.name.strip(),
@@ -314,7 +316,7 @@ def register(payload: RegisterIn):
 def login(payload: LoginIn):
     with SessionLocal() as db:
         user = db.query(User).filter(User.email == payload.email.lower().strip()).first()
-        if not user or not bcrypt.verify(payload.password, user.password_hash):
+        if not pwd_context.verify(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
         token = create_token(user.id, user.email)
         return {"token": token, "user": {"id": user.id, "name": user.name, "email": user.email, "phone": user.phone}}
